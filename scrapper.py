@@ -1,7 +1,6 @@
 import requests
 import re
-from lxml import html
-from lxml import etree
+from lxml import html, etree
 from urllib.parse import urlparse
 import argparse
 
@@ -13,41 +12,52 @@ args = parser.parse_args()
 
 
 def elementToText(element):
-    text = element.text
-    if text is None:
-        text = ""
+    text = ''
+    if element.tag not in ['button', 'input', 'script']:
+        text = element.text
+        if text is None:
+            text = ""
+        if element.tag in ['img', 'svg']:
+            text = "[Image]\n"
+        if element.tag in ['h1', 'h2', 'h3', 'h4', 'h5']:
+            text = "\n<b>"+text+"<b>\n"
+        if element.tag in ['div', 'p']:
+            text = text + "\n"
+        for child in element.getchildren():
+            text += elementToText(child)
+    return text
 
 
 def printArticles(articles):
     for article in articles:
-        print(etree.tostring(article, pretty_print=True))
+        print(elementToText(article))
     return
 
 
-def printBody(tree):
-    print(etree.tostring(tree, pretty_print=True))
+def printBody(body):
+    print(elementToText(body))
     return
 
 
-def printContent(tree):
-    articles = tree.xpath('//article')
+def printContent(body):
+    articles = body.xpath('//article')
     if len(articles) > 0:
         printArticles(articles)
     else:
-        printBody(tree)
+        printBody(body)
     return
 
 
-def switch(netloc, tree):
+def switch(netloc, body):
     if re.search("^www.wikipedia", netloc) is not None:
-        printContent(tree)
+        printContent(body)
     else:
-        printContent(tree)
+        printContent(body)
     return
 
 
 response = requests.get(args.url)
-tree = html.fromstring(response.content)
-
+tree = html.fromstring(
+    response.content, parser=etree.HTMLParser(remove_comments=True))
 netloc = urlparse(args.url).netloc
-switch(netloc, tree)
+switch(netloc, tree.xpath('//body')[0])
