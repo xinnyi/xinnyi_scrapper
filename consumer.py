@@ -13,7 +13,7 @@ channel.queue_declare(queue='scrapper')  # Declare a queue
 
 
 # create a function which is called on incoming messages
-async def callback(ch, method, properties, body):
+def callback(ch, method, properties, body):
     os.system("scrapper.py --url="+body.decode('utf-8'))
     print(" [x] Received " + body.decode('utf-8'))
 
