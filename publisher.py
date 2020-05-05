@@ -15,6 +15,6 @@ channel.queue_declare(queue='scrapper')  # Declare a queue
 # send a message
 
 channel.basic_publish(
-    exchange='', routing_key='scrapper', body='https://stackoverflow.com/questions/534839/how-to-create-a-guid-uuid-in-python')
+    exchange='', routing_key='scrapper', body='https://www.20min.ch/story/parlament-muss-sich-mit-drei-dutzend-corona-vorstoessen-befassen-613331372526')
 print("[x] Message sent to consumer")
 connection.close()

@@ -4,7 +4,7 @@ from elasticsearch import Elasticsearch
 es = Elasticsearch(["localhost:9200"])
 
 
-res = es.search(index="test-index", body={"query": {"match_all": {}}})
+res = es.search(index="scrapper", body={"query": {"match_all": {}}})
 print("Got %d Hits:" % res['hits']['total']['value'])
 for hit in res['hits']['hits']:
-    print("%(timestamp)s %(url)s" % hit["_source"])
+    print(hit["_source"]["timestamp"], hit["_id"])

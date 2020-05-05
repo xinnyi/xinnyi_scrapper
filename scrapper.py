@@ -1,11 +1,13 @@
 import requests
 import re
-import uuid
+import pika
+import os
+import logging
 from lxml import html, etree
 from urllib.parse import urlparse
 from datetime import datetime
 from elasticsearch import Elasticsearch
-import argparse
+
 
 # Convert lxml element to string
 def elementToText(element):
@@ -15,81 +17,95 @@ def elementToText(element):
     if text is None:
         text = ""
     if element.tag in ['img', 'svg']:
-        text = "[Image]\n"
+        text = "[Image]\r\n"
     elif element.tag in ['h1', 'h2', 'h3', 'h4', 'h5']:
-        text = "<b>" + text + "<b>\n"
+        text = "<b>" + text + "</b>\r\n"
     elif element.tag in ['a']:
         link = element.get("href")
         text = "<i>" + text + " " + str(element.get("href") or "") + "</i>"
-    elif element.tag in ['div', 'p']:
-        text = text + "\n"
+    elif element.tag in ['div', 'p'] and element.text is not None:
+        text = text + "\r\n"
     for child in element.getchildren():
         text += elementToText(child)
+    text = re.sub(r'(([\r\n]\s*){3,}?)+', r'\r\n\r\n', text)
+    text = re.sub(r'[ \t]{4,}', r'    ', text)
+    text = re.sub(r'(\t\s*){2,}', r'\t', text)
     return text
 
-# Saves a string to elasticsearch
-def saveToElastic(text):
+# Saves an article to elasticsearch
+def saveToElastic(url, text):
     doc = {
-        'url': args.url,
         'text': text,
         'timestamp': datetime.now(),
     }
-    id = uuid.uuid4()
-    res = es.index(index="test-index", id=id, body=doc)
-    print(res['result'], id)
+
+    res = es.index(index="scrapper", id=url, body=doc)
+    print(res['result'], url)
 
 
 # default
-def handleWebsite():
+def handleWebsite(url, body):
     articles = body.xpath('//article')
     if len(articles) > 0:
         text = ''
         for article in articles:
             text += elementToText(article) + '\n'
-        saveToElastic(text)
+        saveToElastic(url, text)
     else:
-        saveToElastic(elementToText(body))
-
-    return
+        saveToElastic(url, elementToText(body))
 
 
-def handleWikipedia():
+def handleWikipedia(url, body):
     print("wikipedia.org/...")
 
-def handleNoseryoung():
+def handleNoseryoung(url, body):
     print("noseryoung.ch")
 
 # Decide wich method should be used
-def switch(netloc):
+def switch(url, body):
     for k, v in netLocations.items():
-        if re.search(k, netloc) is not None:
-            v()
+        if re.search(k, urlparse(url).netloc) is not None:
+            v(url, body)
             return
-    handleWebsite()
-    return
+    handleWebsite(url, body)
 
 
-# Parse arguments
-parser = argparse.ArgumentParser(description='save articles')
-parser.add_argument("-u", "--url", help="url of the article to be saved", default="https://www.20min.ch/story/mir-als-finanzminister-ist-es-nicht-mehr-wohl-in-meiner-haut-733321798843")
-args = parser.parse_args()
+# create a function which is called on incoming messages
+def callback(ch, method, properties, body):
+    print(" [x] Received " + body.decode('utf-8'))
+    url = body.decode('utf-8')
+    try:
+        # Make request
+        response = requests.get(url)
 
-# Connect to elasticseatch
-es = Elasticsearch(["localhost:9200"])
+        # Parse response
+        tree = html.fromstring(response.content, parser=etree.HTMLParser(remove_comments=True))
+        body = tree.xpath('//body')[0]
+
+        # Handle response
+        switch(url, body)
+    except requests.exceptions.RequestException as error:
+        print(error)
 
 
-# Define locations wich are handled differently
+# Define locations wich are handled individullay
 netLocations = {"wikipedia.org": handleWikipedia,
                 "noseryoung.ch": handleNoseryoung}
 
 
-# Make request
-response = requests.get(args.url)
+# Connect to elasticseatch
+es = Elasticsearch(["localhost:9200"])
 
-# Parse response
-tree = html.fromstring(
-    response.content, parser=etree.HTMLParser(remove_comments=True))
-body = tree.xpath('//body')[0]
+# Connect to rabbitmq
+params = pika.URLParameters("amqp://localhost:5672")
+connection = pika.BlockingConnection(params)
+channel = connection.channel()
+channel.queue_declare(queue='scrapper')
 
-# Handle response
-switch(urlparse(args.url).netloc)
+
+# set up subscription on the queue
+channel.basic_consume('scrapper', callback, auto_ack=True)
+
+# start consuming (blocks)
+channel.start_consuming()
+connection.close()
