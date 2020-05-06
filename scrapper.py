@@ -29,9 +29,8 @@ def elementToText(element):
         text = "<b>" + text + "</b>\r\n"
     if element.tag in ['div', 'p'] and element.text is not None:
         text = text + "\r\n"
-    text = re.sub(r'(([\r\n]\s*){3,}?)+', r'\r\n\r\n', text)
-    text = re.sub(r'[ \t]{4,}', r'    ', text)
-    text = re.sub(r'(\t\s*){2,}', r'\t', text)
+    text = re.sub(r'(([\r\n]\s*){3,}?)+', r'\r\n\r\n', text)  # remove multiple linebreaks
+    text = re.sub(r'[ \t]{4,}', r'    ', text)  # reduce multiple spaces and tabs
     return text
 
 # Saves an article to elasticsearch
@@ -41,7 +40,7 @@ def saveToElastic(url, text, userid):
         'article': text,
         'timestamp': datetime.now(),
     }
-    res = es.index(index="scrapper", id=url, body=doc)
+    res = es.index(index="article", id=url, body=doc)
     print(res['result'], url)
 
 
@@ -75,11 +74,11 @@ es = Elasticsearch(["klemens.li:9200"])
 params = pika.URLParameters("amqp://klemens.li:5672")
 connection = pika.BlockingConnection(params)
 channel = connection.channel()
-channel.queue_declare(queue='scrapper')
+channel.queue_declare(queue='artistore_articles')
 
 
 # set up subscription on the queue
-channel.basic_consume('scrapper', callback, auto_ack=True)
+channel.basic_consume('artistore_articles', callback, auto_ack=True)
 
 # start consuming (blocks)
 channel.start_consuming()
