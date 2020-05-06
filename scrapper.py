@@ -2,7 +2,7 @@ import requests
 import re
 import pika
 import os
-import logging
+import json
 from lxml import html, etree
 from urllib.parse import urlparse
 from datetime import datetime
@@ -35,9 +35,10 @@ def elementToText(element):
     return text
 
 # Saves an article to elasticsearch
-def saveToElastic(url, text):
+def saveToElastic(url, text, userid):
     doc = {
-        'text': text,
+        'userid': userid,
+        'article': text,
         'timestamp': datetime.now(),
     }
     res = es.index(index="scrapper", id=url, body=doc)
@@ -47,10 +48,11 @@ def saveToElastic(url, text):
 # create a function which is called on incoming messages
 def callback(ch, method, properties, body):
     print(" [x] Received " + body.decode('utf-8'))
-    url = body.decode('utf-8')
+    body = json.loads(body)
+
     try:
         # Make request
-        response = requests.get(url)
+        response = requests.get(body['url'])
 
         # Parse response
         tree = html.fromstring(response.content, parser=etree.HTMLParser(remove_comments=True))
@@ -61,16 +63,16 @@ def callback(ch, method, properties, body):
             text = ''
             for article in articles:
                 text += elementToText(article) + '\n'
-            saveToElastic(url, text)
+            saveToElastic(body['url'], text, body['userid'])
     except requests.exceptions.RequestException as error:
         print(error)
 
 
 # Connect to elasticseatch
-es = Elasticsearch(["localhost:9200"])
+es = Elasticsearch(["klemens.li:9200"])
 
 # Connect to rabbitmq
-params = pika.URLParameters("amqp://localhost:5672")
+params = pika.URLParameters("amqp://klemens.li:5672")
 connection = pika.BlockingConnection(params)
 channel = connection.channel()
 channel.queue_declare(queue='scrapper')
