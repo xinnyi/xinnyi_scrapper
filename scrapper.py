@@ -38,36 +38,8 @@ def saveToElastic(url, text):
         'text': text,
         'timestamp': datetime.now(),
     }
-
     res = es.index(index="scrapper", id=url, body=doc)
     print(res['result'], url)
-
-
-# default
-def handleWebsite(url, body):
-    articles = body.xpath('//article')
-    if len(articles) > 0:
-        text = ''
-        for article in articles:
-            text += elementToText(article) + '\n'
-        saveToElastic(url, text)
-    else:
-        saveToElastic(url, elementToText(body))
-
-
-def handleWikipedia(url, body):
-    print("wikipedia.org/...")
-
-def handleNoseryoung(url, body):
-    print("noseryoung.ch")
-
-# Decide wich method should be used
-def switch(url, body):
-    for k, v in netLocations.items():
-        if re.search(k, urlparse(url).netloc) is not None:
-            v(url, body)
-            return
-    handleWebsite(url, body)
 
 
 # create a function which is called on incoming messages
@@ -80,17 +52,16 @@ def callback(ch, method, properties, body):
 
         # Parse response
         tree = html.fromstring(response.content, parser=etree.HTMLParser(remove_comments=True))
-        body = tree.xpath('//body')[0]
 
         # Handle response
-        switch(url, body)
+        articles = tree.xpath('//article')
+        if len(articles) > 0:
+            text = ''
+            for article in articles:
+                text += elementToText(article) + '\n'
+            saveToElastic(url, text)
     except requests.exceptions.RequestException as error:
         print(error)
-
-
-# Define locations wich are handled individullay
-netLocations = {"wikipedia.org": handleWikipedia,
-                "noseryoung.ch": handleNoseryoung}
 
 
 # Connect to elasticseatch
