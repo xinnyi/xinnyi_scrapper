@@ -17,16 +17,18 @@ def elementToText(element):
     if text is None:
         text = ""
     if element.tag in ['img', 'svg']:
-        text = "[Image]\r\n"
-    elif element.tag in ['h1', 'h2', 'h3', 'h4', 'h5']:
-        text = "<b>" + text + "</b>\r\n"
+        text = "[%s]\r\n" % element.get("alt")
+    elif element.tag in ['video']:
+        text = "[video]"
     elif element.tag in ['a']:
         link = element.get("href")
         text = "<i>" + text + " " + str(element.get("href") or "") + "</i>"
-    elif element.tag in ['div', 'p'] and element.text is not None:
-        text = text + "\r\n"
     for child in element.getchildren():
         text += elementToText(child)
+    if element.tag in ['h1', 'h2', 'h3', 'h4', 'h5']:
+        text = "<b>" + text + "</b>\r\n"
+    if element.tag in ['div', 'p'] and element.text is not None:
+        text = text + "\r\n"
     text = re.sub(r'(([\r\n]\s*){3,}?)+', r'\r\n\r\n', text)
     text = re.sub(r'[ \t]{4,}', r'    ', text)
     text = re.sub(r'(\t\s*){2,}', r'\t', text)
