@@ -33,17 +33,6 @@ def elementToText(element):
     text = re.sub(r'[ \t]{4,}', r'    ', text)  # reduce multiple spaces and tabs
     return text
 
-# Saves an article to elasticsearch
-def saveToElastic(url, text, userid):
-    doc = {
-        'userid': userid,
-        'article': text,
-        'timestamp': datetime.now(),
-    }
-    res = es.index(index="article", id=url, body=doc)
-    print(res['result'], url)
-
-
 # create a function which is called on incoming messages
 def callback(ch, method, properties, body):
     print(" [x] Received " + body.decode('utf-8'))
@@ -62,7 +51,12 @@ def callback(ch, method, properties, body):
             text = ''
             for article in articles:
                 text += elementToText(article) + '\n'
-            saveToElastic(body['url'], text, body['userid'])
+            res = es.index(index="article", id=body['url'], body={
+                'userid': body['userid'],
+                'article': text,
+                'timestamp': datetime.now()
+            })
+            print(res['result'], body['url'])
     except requests.exceptions.RequestException as error:
         print(error)
 
