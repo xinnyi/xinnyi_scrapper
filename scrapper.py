@@ -57,7 +57,7 @@ def callback(ch, method, properties, body):
                 'timestamp': datetime.now()
             })
             print(res['result'], body['url'])
-    except requests.exceptions.RequestException as error:
+    except Exception as error:
         print(error)
 
 
