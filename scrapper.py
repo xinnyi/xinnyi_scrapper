@@ -2,6 +2,7 @@ import requests
 import re
 import pika
 import os
+import uuid
 import json
 from lxml import html, etree
 from urllib.parse import urlparse
@@ -26,7 +27,7 @@ def elementToText(element):
     for child in element.getchildren():
         text += elementToText(child)
     if element.tag in ['h1', 'h2', 'h3', 'h4', 'h5']:
-        text = "<b>" + text + "</b>\r\n"
+        text = "\r\n<b>" + text + "</b>\r\n"
     if element.tag in ['div', 'p'] and element.text is not None:
         text = text + "\r\n"
     text = re.sub(r'(([\r\n]\s*){3,}?)+', r'\r\n\r\n', text)  # remove multiple linebreaks
@@ -35,7 +36,7 @@ def elementToText(element):
 
 # create a function which is called on incoming messages
 def callback(ch, method, properties, body):
-    print(" [x] Received " + body.decode('utf-8'))
+    print("Received " + body.decode('utf-8'))
     body = json.loads(body)
 
     try:
@@ -51,12 +52,30 @@ def callback(ch, method, properties, body):
             text = ''
             for article in articles:
                 text += elementToText(article) + '\n'
-            res = es.index(index="article", id=body['url'], body={
+
+            # new uuid
+            id = uuid.uuid4()
+
+            # query for article with url and userid
+            res = es.search(index="article", body={"_source": False, "query": {
+                "bool": {"should": [
+                    {"term": {"userid": body['userid']}},
+                    {"term": {"url": body['url']}}
+                ]
+                }}})
+
+            # replace id with id of found article
+            if res['hits']['total']["value"] == 1:
+                id = (res['hits']['hits'][0]["_id"])
+
+            # update or create article
+            res = es.index(index="article", id=id, body={
+                'url': body['url'],
                 'userid': body['userid'],
                 'article': text,
                 'timestamp': datetime.now()
             })
-            print(res['result'], body['url'])
+            print(" [x] " + res['result'] + " " + id)
     except Exception as error:
         print(error)
 
