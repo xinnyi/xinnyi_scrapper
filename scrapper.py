@@ -36,7 +36,7 @@ def elementToText(element):
 
 # create a function which is called on incoming messages
 def callback(ch, method, properties, body):
-    print("Received " + body.decode('utf-8'))
+    print(" [x] Received " + body.decode('utf-8'))
     body = json.loads(body)
 
     try:
@@ -75,7 +75,7 @@ def callback(ch, method, properties, body):
                 'article': text,
                 'timestamp': datetime.now()
             })
-            print(" [x] " + res['result'] + " " + id)
+            print(res['result'], id)
     except Exception as error:
         print(error)
 
